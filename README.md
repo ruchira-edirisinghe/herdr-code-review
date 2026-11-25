@@ -44,7 +44,7 @@ New here:
   shown apart at the top. It lists the messages between sessions and has a box to message the
   coordinator, one agent or everyone as you. **Start coordinator** opens one with its brief.
 - **Session colours.** Give a session one of twelve named colours, or let it use its space's.
-  The colour edges its row in Agents and its hub card and marks its tab. Right-click the row,
+  The colour tints its row in Agents, its tab and its hub card (stronger when selected). Right-click the row,
   the card or the tab (Colour…), or press Ctrl+Shift+Y. A space's menu sets the space's colour.
 
 Inspired by Warp:
