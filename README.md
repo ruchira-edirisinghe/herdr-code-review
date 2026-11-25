@@ -47,6 +47,14 @@ New here:
   The colour edges its row in Agents and its hub card and marks its tab. Right-click the row,
   the card or the tab (Colour…), or press Ctrl+Shift+Y. A space's menu sets the space's colour.
 
+Inspired by Warp:
+
+- **Command search** (Ctrl+Shift+R, or the `</>` button in the tab bar). Shell history and saved
+  workflows in one list. Enter pastes the command into the terminal to check; Ctrl+Enter runs it.
+- **Workflows.** Saved commands with `{{placeholders}}`, in `workflows.json` (save one from history).
+- **Ask AI** (Ctrl+Shift+Space). Describe it; Claude Code (`claude -p`) writes the command.
+- **Launch configurations** (Ctrl+Shift+J). Save the open spaces and tabs as a setup and reopen it.
+
 ## What's in it
 
 | Path | What |
@@ -60,6 +68,7 @@ New here:
 | `mods/review-spaces/`, `mods/review-agents/` | Herdr's sidebar and agents list, with the extra lines |
 | `mods/hub/` | The hub: the coordinator, every agent, the session-bridge messages and a message box |
 | `mods/session-color/` | The colour picker for sessions and spaces |
+| `mods/commands/`, `mods/launch/` | Command search (history, workflows, Ask AI) and launch configurations |
 
 Command palette (Ctrl+Shift+P): **Code view beside the terminal** and **Code view in a new tab**
 open the Explorer for the repo you're working in.
@@ -81,7 +90,8 @@ Already on your own layout? Keep it, and point its Changes block at the new mod:
 Keys for `keys.json` (the inbox's are under `global`):
 
 ```json
-{ "global": { "ctrl-shift-i": "review-tabs.inbox", "ctrl-shift-u": "review-tabs.jump-unread", "ctrl-shift-y": "review-tabs.color" },
+{ "global": { "ctrl-shift-i": "review-tabs.inbox", "ctrl-shift-u": "review-tabs.jump-unread", "ctrl-shift-y": "review-tabs.color",
+    "ctrl-shift-r": "review-tabs.command-search", "ctrl-shift-space": "review-tabs.ask-ai", "ctrl-shift-j": "review-tabs.launch" },
   "mod:review-file": { "ctrl-shift-e": "review-file.explorer", "ctrl-alt-c": "review-file.code-only", "ctrl-alt-s": "review-file.split", "ctrl-alt-t": "review-file.terminal-only" } }
 ```
 
