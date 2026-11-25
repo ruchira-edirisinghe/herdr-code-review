@@ -7,7 +7,7 @@
 // Opened by review-changes (the Changes panel's Open full file) and the palette's Code view.
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar, v_virtual_list, VirtualListScrollHandle } from "gpui-base";
-import { props, exec, readTextFile, watchFolder, theme, settings, window, nextCommand, run, panes, focused, spaces, shared, setShared } from "herdr";
+import { props, exec, readTextFile, watchFolder, theme, settings, window, nextCommand, run, panes, focused, spaces, shared, setShared, layout } from "herdr";
 
 // Reads write nothing under .git, so the folder watch doesn't wake us again.
 const READ = ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "diff.autoRefreshIndex=false"];
@@ -129,6 +129,37 @@ function place() {
   const tabs = new Set((space?.tabs ?? []).map(t => t.id)), terminal = all.find(p => tabs.has(p.tab) && p.cwd);
   return { cwd: terminal?.cwd || f?.cwd || space?.folder, on };
 }
+// A folder's entries, as the shipped Files panel lists them (for folders outside git).
+async function directory(path, on) {
+  const windowsDirectory = async () => {
+    // Windows PowerShell otherwise uses the console code page; exec decodes UTF-8.
+    // Links keep directory attributes even when dangling; check their target.
+    // Other reparse points (OneDrive's folders) have no LinkType and are folders.
+    // PowerShell reads curly single quotes as quotes too, so they're doubled like '.
+    const r = await exec("powershell", ["-NoProfile", "-Command", "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); & { param($p) @(Get-ChildItem -LiteralPath $p -Force -ErrorAction Stop | Where-Object Name -ne '.git' | Select-Object -First 501 | ForEach-Object { @{ name=$_.Name; dir=($_.PSIsContainer -and (-not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -or -not $_.LinkType -or ($_.Target -and [IO.Directory]::Exists(([IO.Path]::Combine([IO.Path]::GetDirectoryName($_.FullName), $_.Target[0])))))) } }) | ConvertTo-Json -Compress } '" + path.replace(/['‘’‚‛]/g, "$&$&") + "'"], { on });
+    if (r.code !== 0) throw new Error(r.stderr || "Cannot list this folder");
+    const result = JSON.parse(r.stdout || "[]");
+    return Array.isArray(result) ? result : [result];
+  };
+  if (!on && window()?.platform === "windows") return windowsDirectory();
+  const script = 'n=0; for p in "$1"/* "$1"/.[!.]* "$1"/..?*; do [ -e "$p" ] || [ -L "$p" ] || continue; name=${p##*/}; [ "$name" = .git ] && continue; if [ -d "$p" ]; then kind=d; else kind=f; fi; printf "%s\\0%s\\0" "$kind" "$name"; n=$((n+1)); [ "$n" -gt 500 ] && break; done; test -d "$1"';
+  let r;
+  try { r = await exec("sh", ["-c", script, "files", path], { on }); }
+  catch (e) {
+    if (on && String(e).includes("cannot start sh: program not found")) return windowsDirectory();
+    throw e;
+  }
+  if (r.code !== 0) throw new Error(r.stderr || "Cannot list this folder");
+  const fields = r.stdout.split("\0"), out = [];
+  for (let i = 0; i + 1 < fields.length; i += 2) out.push({ name: fields[i + 1], dir: fields[i] === "d" });
+  return out;
+}
+
+function findNode(node, id) {
+  if (node?.id === id) return node;
+  for (const child of node?.children ?? []) { const found = findNode(child, id); if (found) return found; }
+  return null;
+}
 const MARK = { A: "ansi2", M: "blocked", D: "ansi1", U: "ansi1" };
 // Which view holds which review-file pane (the views share one VM): pane id → { token, at }.
 const claims = globalThis[Symbol.for("review-file.claims")] ??= new Map();
@@ -139,15 +170,21 @@ export default class ReviewFile extends View {
   init(_props, cx) {
     const p = props() ?? {};
     this.root = p.root ?? null; this.on = p.on ?? null; this.path = p.path ?? null; this.ownsTab = Boolean(p.tab);
+    // part: "explorer" or "code" is a layout block that follows the shown space, not a pane.
+    this.part = p.part === "explorer" || p.part === "code" ? p.part : null;
+    this.isGit = true; this.dirEntries = new Map(); this.spaceStates = new Map();
     this.token = Math.random().toString(36).slice(2); this.tab = null; this.gotoAt = shared("review-file.goto")?.at ?? 0;
-    this.identify();
+    if (!this.part) this.identify();
     this.rows = []; this.view = []; this.hunks = []; this.add = 0; this.del = 0; this.longest = 0;
     this.compact = false; this.at = -1; this.handle = cx.focus_handle(); this.scroll = VirtualListScrollHandle.new();
     this.changes = []; this.marks = {}; this.markedDirs = new Set(); this.tree = null; this.treeRows = []; this.openDirs = new Set();
     this.start(cx);
     cx.timer.every(500, cx => {
-      const known = this.paneId;
-      if (this.identify()?.pane !== known) cx.notify(); // Keeps the claim; redraws once found.
+      if (this.part) this.followSpace(cx);
+      else {
+        const known = this.paneId;
+        if (this.identify()?.pane !== known) cx.notify(); // Keeps the claim; redraws once found.
+      }
       const active = window()?.active !== false, refocused = active && this.active === false;
       this.active = active;
       if (active && !this.loading && (refocused || (this.dirtyAt && Date.now() >= this.dirtyAt))) { this.load(cx); this.loadFiles(cx, refocused); }
@@ -173,8 +210,40 @@ export default class ReviewFile extends View {
     });
   }
 
+  // A layout block shows the shown space: its repo, else its folder. Each space keeps
+  // its own open file and folders.
+  followSpace(cx) {
+    const space = spaces().find(s => s.active), { cwd, on } = place();
+    const key = JSON.stringify([space?.id, cwd, on]);
+    if (key === this.placeKey || this.resolving) return;
+    this.placeKey = key;
+    if (!cwd) return;
+    this.resolving = true;
+    cx.spawn(async cx => {
+      try {
+        const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd, on }).catch(() => null);
+        const isGit = top?.code === 0, root = isGit ? top.stdout.trim() : cwd;
+        if (root !== this.root || space?.id !== this.spaceId || on !== this.on) this.reroot({ root, on, isGit, spaceId: space?.id }, cx);
+      } finally { this.resolving = false; cx.notify(); }
+    });
+  }
+
+  reroot({ root, on, isGit, spaceId }, cx) {
+    if (this.spaceId) this.spaceStates.set(this.spaceId, { root: this.root, path: this.path, openDirs: this.openDirs, compact: this.compact });
+    const saved = this.spaceStates.get(spaceId), same = saved?.root === root;
+    this.spaceId = spaceId; this.root = root; this.on = on; this.isGit = isGit;
+    this.path = same ? saved.path : null; this.openDirs = same ? saved.openDirs : new Set(); this.compact = same ? saved.compact : false;
+    this.tree = null; this.dirEntries = new Map(); this.treeRows = []; this.changes = []; this.marks = {}; this.markedDirs = new Set();
+    this.first = true; this.at = -1; this.note = null; this.error = null; this.toast = null; this.treeError = null;
+    this.autoOpen = !this.path; this.generation = (this.generation ?? 0) + 1; this.loading = false;
+    this.setRows([]);
+    if (this.part === "code") setShared("review-file.current", { root, path: this.path });
+    this.begin(cx);
+  }
+
   // Opened without a repo (the palette): use the repo of the folder the person works in.
   start(cx) {
+    if (this.part) { this.followSpace(cx); return; }
     if (this.root) { this.begin(cx); return; }
     const { cwd, on } = place();
     if (!cwd) { this.error = "No folder: open this from a terminal's folder"; return; }
@@ -187,15 +256,15 @@ export default class ReviewFile extends View {
   }
 
   begin(cx) {
-    this.load(cx);
+    if (this.part !== "explorer") this.load(cx);
     this.loadFiles(cx, true);
     this.watch(cx);
   }
 
-  get explorer() { return shared("review-file.explorer") ?? true; }
+  get explorer() { return this.part ? this.part === "explorer" : shared("review-file.explorer") ?? true; }
   // Narrow panes (a split) hide the Explorer until asked for, as VS Code's does.
   get narrow() { return (this.width ?? 1000) < 760; }
-  get showExplorer() { return this.narrow ? this.explorer && this.forceExplorer === true : this.explorer; }
+  get showExplorer() { return this.part ? false : this.narrow ? this.explorer && this.forceExplorer === true : this.explorer; }
   toggleExplorer() {
     if (this.narrow && this.explorer) this.forceExplorer = !this.forceExplorer;
     else { setShared("review-file.explorer", !this.explorer); this.forceExplorer = true; }
@@ -203,12 +272,16 @@ export default class ReviewFile extends View {
 
   // A save anywhere in the repo: the diff, the changed files and the tree may all differ.
   watch(cx) {
+    this.watching?.pending?.cancel();
+    this.watching = null;
     if (this.on || !this.root) return;
-    const root = this.root;
+    const state = this.watching = { root: this.root };
     cx.spawn(async cx => {
       try {
-        for (;;) {
-          const changed = await watchFolder(root);
+        while (this.watching === state) {
+          state.pending = watchFolder(state.root);
+          const changed = await state.pending;
+          if (this.watching !== state) break;
           if (changed.some(p => !/[\\/]\.git([\\/]|$)/.test(p))) this.dirtyAt = Date.now() + 300; // Let a save settle.
         }
       } catch { /* The folder went away; the window refocus check still reloads. */ }
@@ -224,6 +297,16 @@ export default class ReviewFile extends View {
     const root = this.root, tree = full || !this.tree || Date.now() - (this.treeAt ?? 0) > 5000;
     cx.spawn(async cx => {
       try {
+        if (!this.isGit) {
+          if (!this.explorer) return;
+          for (const dir of ["", ...this.openDirs]) {
+            if (root !== this.root) return;
+            try { this.dirEntries.set(dir, await this.listFolder(dir)); }
+            catch (e) { if (!dir) throw e; }
+          }
+          this.flatten();
+          return;
+        }
         const status = await this.git(["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all"]);
         if (root !== this.root) return;
         if (status.code === 0) {
@@ -246,8 +329,18 @@ export default class ReviewFile extends View {
         }
         this.flatten();
       } catch (e) { this.treeError = String(e?.message ?? e); }
-      finally { this.filesLoading = false; cx.notify(); }
+      finally {
+        this.filesLoading = false;
+        // A space with changes opens its first changed file, as the Changes panel does.
+        if (this.part === "code" && this.autoOpen && !this.path && this.changes.length) { this.autoOpen = false; this.openPath(this.changes[0].path, cx); }
+        cx.notify();
+      }
     });
+  }
+
+  async listFolder(dir) {
+    const entries = await directory(dir ? `${this.root}/${dir}` : this.root, this.on);
+    return entries.slice(0, 500).sort((a, b) => Number(b.dir) - Number(a.dir) || byName(a.name, b.name));
   }
 
   buildTree(files) {
@@ -276,7 +369,17 @@ export default class ReviewFile extends View {
       }
       for (const path of [...node.files].sort(byName)) out.push({ dir: false, name: path.slice(path.lastIndexOf("/") + 1), path, depth });
     };
-    if (this.tree) walk(this.tree, 0);
+    if (this.isGit && this.tree) walk(this.tree, 0);
+    if (!this.isGit) {
+      const list = (dir, depth) => {
+        for (const e of this.dirEntries.get(dir) ?? []) {
+          const path = dir ? `${dir}/${e.name}` : e.name, open = e.dir && this.openDirs.has(path);
+          out.push({ dir: e.dir, name: e.name, path, depth, open });
+          if (open) list(path, depth + 1);
+        }
+      };
+      list("", 0);
+    }
     this.treeRows = out;
   }
 
@@ -287,22 +390,40 @@ export default class ReviewFile extends View {
 
   toggleDir(path, cx) {
     if (this.openDirs.has(path)) { for (const d of [...this.openDirs]) if (d === path || d.startsWith(path + "/")) this.openDirs.delete(d); }
-    else this.openDirs.add(path);
+    else {
+      this.openDirs.add(path);
+      if (!this.isGit && !this.dirEntries.has(path)) {
+        const root = this.root;
+        cx.spawn(async cx => {
+          try { const entries = await this.listFolder(path); if (root === this.root) this.dirEntries.set(path, entries); }
+          catch (e) { this.treeError = String(e?.message ?? e); }
+          this.flatten(); cx.notify();
+        });
+      }
+    }
     this.flatten(); cx.notify();
   }
 
   // Shows another file in this view (the Explorer, the Changes list, or the Changes panel).
   openPath(path, cx) {
     if (!path) return;
+    if (this.part === "explorer") {
+      this.path = path; this.flatten();
+      setShared("review-file.goto", { target: "layout", root: this.root, on: this.on, isGit: this.isGit, path, at: Date.now() });
+      if (findNode(layout(), "code")?.hidden) run("layout.show", { id: "code" });
+      cx.notify();
+      return;
+    }
     this.path = path; this.first = true; this.at = -1; this.note = null; this.error = null; this.toast = null;
     this.setRows([]); this.reveal(path); this.flatten();
     if (this.ownsTab) run("tab.rename", { id: this.tab, name: path.split("/").pop() });
+    if (this.part === "code") setShared("review-file.current", { root: this.root, path });
     this.load(cx);
     cx.notify();
   }
 
   load(cx) {
-    const root = this.root, path = this.path, on = this.on;
+    const root = this.root, path = this.path, on = this.on, isGit = this.isGit;
     this.dirtyAt = 0;
     if (!root || !path) return;
     this.loading = true;
@@ -310,7 +431,7 @@ export default class ReviewFile extends View {
     cx.spawn(async cx => {
       try {
         const git = (args) => exec("git", [...READ, ...args], { cwd: root, on });
-        const hasHead = (await git(["rev-parse", "--verify", "--quiet", "HEAD"])).code === 0;
+        const hasHead = isGit && (await git(["rev-parse", "--verify", "--quiet", "HEAD"])).code === 0;
         let rows = null, note = null;
         if (hasHead) {
           const r = await git(["diff", "HEAD", "--unified=1000000", "--no-ext-diff", "--no-textconv", "--no-color", "--", path]);
@@ -327,7 +448,7 @@ export default class ReviewFile extends View {
           else if (text.includes("\0")) note = "Binary file · no text view";
           else {
             const lines = text.replace(/\n$/, "").split("\n").slice(0, MAX_LINES);
-            rows = lines.map((line, i) => tracked ? { kind: " ", old: i + 1, new: i + 1, text: clip(line) } : { kind: "+", new: i + 1, text: clip(line) });
+            rows = lines.map((line, i) => tracked || !isGit ? { kind: " ", old: i + 1, new: i + 1, text: clip(line) } : { kind: "+", new: i + 1, text: clip(line) });
             if (tracked) note = "No uncommitted changes in this file";
           }
         }
@@ -472,6 +593,7 @@ export default class ReviewFile extends View {
   }
 
   mode() {
+    if (this.part) return findNode(layout(), "main")?.hidden ? "code" : "split";
     const here = this.panesHere();
     if (!here) return null;
     return here.mine.zoomed || here.same.length === 1 ? "code" : "split";
@@ -481,6 +603,7 @@ export default class ReviewFile extends View {
   addTerminal(pane) { run("pane.split", { direction: "down", pane }); }
 
   showSplit(cx) {
+    if (this.part) { run("layout.show", { id: "main" }); run("layout.show", { id: "code" }); return; }
     const here = this.panesHere();
     if (!here) return;
     if (here.zoomed) run("pane.zoom", { pane: here.zoomed.pane });
@@ -489,6 +612,7 @@ export default class ReviewFile extends View {
   }
 
   showCode(cx) {
+    if (this.part) { run("layout.show", { id: "code" }); run("layout.hide", { id: "main" }); return; }
     const here = this.panesHere();
     if (!here || here.mine.zoomed || here.same.length < 2) return;
     run("pane.zoom", { pane: here.mine.pane });
@@ -496,6 +620,8 @@ export default class ReviewFile extends View {
   }
 
   showTerminal(cx) {
+    // In the layout, the tab's right-click menu brings the code reviewer back.
+    if (this.part) { run("layout.show", { id: "main" }); run("layout.hide", { id: "code" }); return; }
     const here = this.panesHere();
     if (!here) return;
     if (here.mine.zoomed) run("pane.zoom", { pane: here.mine.pane });
@@ -579,7 +705,7 @@ export default class ReviewFile extends View {
       .child(segment("mode-terminal", "Terminal", "terminal", cx => this.showTerminal(cx)));
   }
 
-  explorerPane(t) {
+  explorerPane(t, full = false) {
     const name = this.root ? this.root.split(/[\\/]/).pop() : "";
     const fileRow = (id, path, label, depth, mark, dim) => h_flex().id(id).w_full().h(TREE_ROW).flex_none().pl(8 + depth * 14).pr(8).gap(6).items_center().cursor_pointer()
       .when(path === this.path, e => e.bg(t.selected)).hover(s => s.bg(t.hover))
@@ -598,16 +724,17 @@ export default class ReviewFile extends View {
       : fileRow(`file-${r.path}`, r.path, r.name, r.depth, this.marks[r.path]);
     // overflow_y_scrollbar() wraps its element, so both lists sit absolutely in a sized box.
     const shown = this.changes.slice(0, 500);
-    return v_flex().w(260).flex_none().h_full().min_h(0).border_r(1).border_color(t.border).bg(t.chrome ?? t.background).text_size(12)
+    return v_flex().when(full, e => e.size_full()).when(!full, e => e.w(260).flex_none().h_full().border_r(1).border_color(t.border))
+      .min_h(0).bg(t.chrome ?? t.background).text_size(12)
       .child(h_flex().h(30).flex_none().px(12).items_center().text_size(10).text_color(t.dim).child("EXPLORER"))
-      .child(h_flex().h(24).flex_none().px(12).items_center().text_size(10).font_semibold().text_color(t.muted).child(`CHANGES (${this.changes.length})`))
+      .when(this.isGit, e => e.child(h_flex().h(24).flex_none().px(12).items_center().text_size(10).font_semibold().text_color(t.muted).child(`CHANGES (${this.changes.length})`))
       .child(div().flex_none().h(Math.min(200, Math.max(1, shown.length) * TREE_ROW)).relative()
         .child(v_flex().id("review-changes-list").absolute().inset_0().overflow_y_scroll()
           .children(shown.map(c => {
             const slash = c.path.lastIndexOf("/");
             return fileRow(`change-${c.path}`, c.path, c.path.slice(slash + 1), 0, c.status, slash > 0 ? c.path.slice(0, slash) : "");
           }))
-          .when(!shown.length, e => e.child(div().px(12).py(4).text_size(11).text_color(t.dim).child("No uncommitted changes")))))
+          .when(!shown.length, e => e.child(div().px(12).py(4).text_size(11).text_color(t.dim).child("No uncommitted changes"))))))
       .child(h_flex().h(24).flex_none().px(12).mt(6).items_center().border_t(1).border_color(t.border).text_size(10).font_semibold().text_color(t.muted).child(name.toUpperCase()))
       .child(div().flex_1().min_h(0).relative()
         // A plain list like the Files panel's: open folders only, at most 5,000 rows.
@@ -618,18 +745,33 @@ export default class ReviewFile extends View {
       .when(Boolean(this.limited), e => e.child(div().px(12).py(4).text_size(10).text_color(t.dim).child("Showing the first 100,000 files")));
   }
 
+  // The layout's left block: the shown space's files. Opening one shows it in the code block.
+  renderExplorer(cx) {
+    const t = theme(), current = shared("review-file.current");
+    if (current?.root === this.root && current.path !== this.path) { this.path = current.path; this.reveal(this.path); this.flatten(); }
+    return v_flex().id("review-explorer-block").size_full().min_h(0).rounded(10).overflow_hidden().border_1().border_color(t.border)
+      .bg(t.chrome ?? t.background).text_color(t.foreground)
+      .when(Boolean(this.error), e => e.child(div().px(12).py(6).text_size(11).text_color(t.ansi1).child(this.error)))
+      .child(this.explorerPane(t, true));
+  }
+
   render(cx) {
-    // The Changes panel asks an open view in its tab to show another file.
+    // The Changes panel or the layout's explorer asks a code view to show another file:
+    // the one in the asking tab, or the layout's code block.
     const goto = shared("review-file.goto");
-    if (goto && goto.at > this.gotoAt && goto.tab === this.tab) {
+    if (goto && goto.at > this.gotoAt && (this.part === "code" ? goto.target === "layout" : !this.part && goto.target !== "layout" && goto.tab === this.tab)) {
       this.gotoAt = goto.at;
-      if (goto.root !== this.root) { this.root = goto.root; this.on = goto.on ?? null; this.tree = null; this.openDirs = new Set(); this.loadFiles(cx, true); }
+      if (goto.root !== this.root) {
+        this.root = goto.root; this.on = goto.on ?? null; this.isGit = goto.isGit ?? true;
+        this.tree = null; this.dirEntries = new Map(); this.openDirs = new Set(); this.loadFiles(cx, true); this.watch(cx);
+      }
       this.openPath(goto.path, cx);
     }
+    if (this.part === "explorer") return this.renderExplorer(cx);
     const t = theme(), s = settings(), size = s.font_size, path = this.path;
     const parts = (path ?? "").split("/"), name = parts.pop(), status = path ? this.marks[path] ?? "" : "";
     const hasChanges = this.hunks.length > 0, explorer = this.showExplorer;
-    return v_flex().id("review-file").size_full().min_h(0).bg(t.background).text_color(t.foreground).text_size(13).track_focus(this.handle)
+    return v_flex().id("review-file").size_full().min_h(0).when(Boolean(this.part), e => e.rounded(10).overflow_hidden().border_1().border_color(t.border)).bg(t.background).text_color(t.foreground).text_size(13).track_focus(this.handle)
       .on_size_change((size, cx) => {
         const width = size.width / (settings().zoom || 1);
         if (Math.abs(width - (this.width ?? 0)) > 1) { this.width = width; cx.notify(); }
@@ -640,10 +782,12 @@ export default class ReviewFile extends View {
         if (k === "n" || k === "f7" || k === "alt-down") { this.step(1, cx); cx.stop_propagation(); }
         else if (k === "p" || k === "shift-n" || k === "shift-f7" || k === "alt-up") { this.step(-1, cx); cx.stop_propagation(); }
         else if (k === "c") { this.toggleCompact(cx); cx.stop_propagation(); }
-        else if (k === "e" || k === "ctrl-b") { this.toggleExplorer(); cx.stop_propagation(); cx.notify(); }
+        else if (k === "e" || k === "ctrl-b") { if (this.part) run("layout.toggle", { id: "explorer" }); else this.toggleExplorer(); cx.stop_propagation(); cx.notify(); }
       })
       .child(h_flex().min_h(42).flex_none().flex_wrap().px(10).py(7).gap(6).items_center().border_b(1).border_color(t.border)
-        .child(this.button(t, "review-explorer", "☰", cx => { this.toggleExplorer(); cx.notify(); }, true, explorer))
+        .child(this.part
+          ? this.button(t, "review-explorer", "☰", () => run("layout.toggle", { id: "explorer" }), true, !findNode(layout(), "explorer")?.hidden)
+          : this.button(t, "review-explorer", "☰", cx => { this.toggleExplorer(); cx.notify(); }, true, explorer))
         .when(Boolean(status), e => e.child(div().text_size(11).text_color(t[MARK[status]]).child(status)))
         .child(h_flex().flex_1().min_w(140).overflow_hidden().child(div().text_color(t.dim).truncate().child(parts.length ? parts.join("/") + "/" : "")).child(div().font_semibold().flex_none().child(name || "Pick a file in the Explorer")))
         .when(Boolean(path), e => e
@@ -668,6 +812,6 @@ export default class ReviewFile extends View {
           .when(!this.view.length, e => e.child(div().absolute().top(8).px(14).text_color(t.dim)
             .child(this.loading ? "Loading…" : path ? "" : this.root ? "Pick a file in the Explorer (☰) to view it" : "")))))
       .child(h_flex().h(24).flex_none().px(14).gap(14).items_center().border_t(1).border_color(t.border).text_size(10).text_color(t.dim).overflow_hidden()
-        .child("n / F7: next change").child("p / Shift+F7: previous").child("c: changes only").child("e: explorer").child("Ctrl+Shift+Z: leave code / terminal only"));
+        .child("n / F7: next change").child("p / Shift+F7: previous").child("c: changes only").child("e: explorer").child(this.part ? "Right-click a tab: show or hide the explorer, code and terminal" : "Ctrl+Shift+Z: leave code / terminal only"));
   }
 }
