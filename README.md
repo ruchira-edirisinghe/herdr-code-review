@@ -31,6 +31,13 @@ Inspired by cmux:
 - **Agent summaries.** The Agents list shows each agent's current task and a one-line summary
   (the question it asks, the step it is on, or its last message).
 
+New here:
+
+- **The hub.** A panel on the right with every agent and what it's doing. The coordinator (a
+  Claude Code session that plans the work and messages the others over the session bridge) is
+  shown apart at the top. It lists the messages between sessions and has a box to message the
+  coordinator, one agent or everyone as you. **Start coordinator** opens one with its brief.
+
 ## What's in it
 
 | Path | What |
@@ -42,6 +49,7 @@ Inspired by cmux:
 | `mods/inbox/` | The notifications inbox |
 | `mods/review-toast/`, `mods/review-pane/` | Herdr's toast and pane header: toasts go into the inbox; panes ring |
 | `mods/review-spaces/`, `mods/review-agents/` | Herdr's sidebar and agents list, with the extra lines |
+| `mods/hub/` | The hub: the coordinator, every agent, the session-bridge messages and a message box |
 
 Command palette (Ctrl+Shift+P): **Code view beside the terminal** and **Code view in a new tab**
 open the Explorer for the repo you're working in.
