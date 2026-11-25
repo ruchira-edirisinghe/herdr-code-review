@@ -29,7 +29,7 @@
               "id": "spaces",
               "type": "block",
               "content": {
-                "mod": "spaces"
+                "mod": "review-spaces"
               },
               "size": {
                 "weight": 1
@@ -40,7 +40,7 @@
               "id": "agents",
               "type": "block",
               "content": {
-                "mod": "agents"
+                "mod": "review-agents"
               },
               "size": {
                 "weight": 1
@@ -127,7 +127,7 @@
                 "pane": {
                   "header": {
                     "content": {
-                      "mod": "pane"
+                      "mod": "review-pane"
                     },
                     "reveal": "always",
                     "height": 30,
@@ -216,5 +216,6 @@
   "traffic_lights": [
     12,
     16
-  ]
+  ],
+  "toast": "review-toast"
 }
