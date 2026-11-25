@@ -1,6 +1,8 @@
 # Code review for Herdr
 
-A [Herdr](https://herdr.dev) layout that adds a VS Code-style code view for reviewing changes.
+A [Herdr](https://herdr.dev) layout that adds a VS Code-style code view for reviewing changes,
+plus agent tracking inspired by [cmux](https://cmux.com). It is also part of
+[Zendr](https://github.com/ruchira-edirisinghe/zendr), a Windows ARM64 build of Herdr's desktop app.
 
 ![preview](preview.png)
 
@@ -14,6 +16,20 @@ A [Herdr](https://herdr.dev) layout that adds a VS Code-style code view for revi
 - **Split, code only, terminal only.** The code view opens beside your terminal. One click
   shows only the code or only the terminal; Ctrl+Shift+Z (pane zoom) goes back to the split.
 - **Live.** The view follows saves in the repo. VS Code opens at the line you're reading.
+- **A space is explorer, code reviewer and terminal.** Right-click a tab to show or hide each
+  of the three. Each space remembers what it shows.
+
+Inspired by cmux:
+
+- **Notifications inbox.** A bell with an unread count in the tab bar. Each time an agent needs
+  you or finishes, and every toast, is listed. Ctrl+Shift+I opens it; Ctrl+Shift+U jumps to the
+  latest unread.
+- **Attention rings.** A pane whose agent needs you gets a tinted header. Its tab lights up.
+- **Sidebar line.** Under each space: its listening ports, its branch's pull request (`gh`), its
+  [session-bridge](https://github.com/iddhi-sulakshana/claude-mods/tree/main/claude-session-bridge)
+  status and its latest unread notification.
+- **Agent summaries.** The Agents list shows each agent's current task and a one-line summary
+  (the question it asks, the step it is on, or its last message).
 
 ## What's in it
 
@@ -22,6 +38,10 @@ A [Herdr](https://herdr.dev) layout that adds a VS Code-style code view for revi
 | `layouts/main-review.json` | Herdr's `main` layout, with the Changes block pointing at `review-changes` |
 | `mods/review-changes/` | Herdr's Changes panel plus "Open full file" (beside the terminal or in a tab), a ⤢ button per file and double-click |
 | `mods/review-file/` | The code view: inline diff, Explorer, Split / Code / Terminal |
+| `mods/review-tabs/`, `mods/review-menu/` | Herdr's tab bar and menu, plus the bell, the per-space Show/Hide items and session-bridge requests |
+| `mods/inbox/` | The notifications inbox |
+| `mods/review-toast/`, `mods/review-pane/` | Herdr's toast and pane header: toasts go into the inbox; panes ring |
+| `mods/review-spaces/`, `mods/review-agents/` | Herdr's sidebar and agents list, with the extra lines |
 
 Command palette (Ctrl+Shift+P): **Code view beside the terminal** and **Code view in a new tab**
 open the Explorer for the repo you're working in.
@@ -40,22 +60,24 @@ herdr-app do layout.switch '{"name":"main-review"}'
 Already on your own layout? Keep it, and point its Changes block at the new mod:
 `"content": { "mod": "review-changes" }`. Ctrl+Shift+L switches layouts back.
 
-Optional keys for `keys.json`:
+Keys for `keys.json` (the inbox's are under `global`):
 
 ```json
-{ "mod:review-file": { "ctrl-shift-e": "review-file.explorer", "ctrl-alt-c": "review-file.code-only", "ctrl-alt-s": "review-file.split", "ctrl-alt-t": "review-file.terminal-only" } }
+{ "global": { "ctrl-shift-i": "review-tabs.inbox", "ctrl-shift-u": "review-tabs.jump-unread" },
+  "mod:review-file": { "ctrl-shift-e": "review-file.explorer", "ctrl-alt-c": "review-file.code-only", "ctrl-alt-s": "review-file.split", "ctrl-alt-t": "review-file.terminal-only" } }
 ```
 
 ## What it runs
 
-Both mods run `git` read-only in the repo you're working in (`status`, `diff`, `ls-files`,
+The code view and Changes panel run `git` read-only in the repo you're working in (`status`, `diff`, `ls-files`,
 `rev-parse`, with `--no-optional-locks` so nothing is written under `.git`). "Commit" in the
 Changes panel runs `git add -A` and `git commit`, as Herdr's own panel does. "VS Code" runs
-`code --goto`. Nothing reaches the network.
+`code --goto`. The sidebar runs `gh pr view` for spaces on a branch, and, on Windows, one
+PowerShell look at listening ports every 20 seconds while the window is active.
 
 Built for herdr-app 0.1.18. Tested on Windows 11 ARM64.
 
 ## License
 
-Apache-2.0, like herdr-app. `mods/review-changes` is a modified copy of herdr-app's shipped
-`changes` mod (see the header of its `main.js` for what changed).
+Apache-2.0, like herdr-app. The `review-*` mods other than `review-file` are modified copies of
+herdr-app's shipped mods (their `mod.json` names which one, under `cloned_from`).
