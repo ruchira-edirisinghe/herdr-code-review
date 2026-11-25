@@ -79,7 +79,7 @@
           "id": "tabs",
           "type": "block",
           "content": {
-            "mod": "tabs"
+            "mod": "review-tabs"
           },
           "size": {
             "px": 42
@@ -90,6 +90,35 @@
           "id": "work-body",
           "type": "row",
           "children": [
+            {
+              "id": "explorer",
+              "type": "block",
+              "content": {
+                "mod": "review-file",
+                "props": {
+                  "part": "explorer"
+                }
+              },
+              "size": {
+                "px": 260
+              },
+              "min": 180,
+              "max": 560
+            },
+            {
+              "id": "code",
+              "type": "block",
+              "content": {
+                "mod": "review-file",
+                "props": {
+                  "part": "code"
+                }
+              },
+              "size": {
+                "weight": 1
+              },
+              "min": 320
+            },
             {
               "id": "main",
               "type": "block",
@@ -117,7 +146,11 @@
                   "gap": 8,
                   "lone": true
                 }
-              }
+              },
+              "size": {
+                "weight": 1
+              },
+              "min": 260
             },
             {
               "id": "panel",
