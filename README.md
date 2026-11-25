@@ -16,14 +16,15 @@ plus agent tracking inspired by [cmux](https://cmux.com). It is also part of
 - **Split, code only, terminal only.** The code view opens beside your terminal. One click
   shows only the code or only the terminal; Ctrl+Shift+Z (pane zoom) goes back to the split.
 - **Live.** The view follows saves in the repo. VS Code opens at the line you're reading.
-- **A space is explorer, code reviewer and terminal.** Right-click a tab to show or hide each
-  of the three. Each space remembers what it shows.
+- **A space starts with just the terminal.** The toolbar's Explorer and Code buttons (or a tab's
+  right-click menu) show the explorer and the code reviewer. Each space remembers what it shows.
 
 Inspired by cmux:
 
-- **Notifications inbox.** A bell with an unread count in the tab bar. Each time an agent needs
-  you or finishes, each session-bridge message and every other toast is listed, grouped by day,
-  each kind in words with an icon. Filter them, remove one, or pause them all for an hour.
+- **Notifications drawer.** The toolbar's Notifications button (with an unread count) opens a
+  drawer on the right. Agents that need you are pinned on top as cards with Go to it / Dismiss;
+  finished agents, session-bridge messages and other toasts follow as a timeline, grouped by day,
+  each kind in words with an icon. Mark all read, or pause them all for an hour.
   Ctrl+Shift+I opens it; Ctrl+Shift+U jumps to the latest unread.
 - **Notification settings.** The mods follow `notifications` in settings.json: for each kind
   (`blocked`, `done`, `bridge`, `other`) `popup` and `inbox` (and `sound`), plus `quiet_until`,
@@ -34,17 +35,21 @@ Inspired by cmux:
 - **Sidebar line.** Under each space: its listening ports, its branch's pull request (`gh`), its
   [session-bridge](https://github.com/iddhi-sulakshana/claude-mods/tree/main/claude-session-bridge)
   status and its latest unread notification.
-- **Agent summaries.** The Agents list shows each agent's current task and a one-line summary
+- **Agent summaries.** The Sessions list shows each agent's current task and a one-line summary
   (the question it asks, the step it is on, or its last message).
 
 New here:
 
-- **The hub.** A panel on the right with every agent and what it's doing. The coordinator (a
+- **A simple layout.** One Sessions list on the left (each space with its sessions nested under
+  it, their state in words), and a toolbar of labelled toggles: Commands, Explorer, Code, Hub and
+  Notifications. The hub and the notifications share one drawer on the right (the layout's
+  `side` stack). `features.agents_list: true` in settings.json brings back the Agents list.
+- **The hub.** A drawer on the right with every agent and what it's doing. The coordinator (a
   Claude Code session that plans the work and messages the others over the session bridge) is
   shown apart at the top. It lists the messages between sessions and has a box to message the
   coordinator, one agent or everyone as you. **Start coordinator** opens one with its brief.
 - **Session colours.** Give a session one of twelve named colours, or let it use its space's.
-  The colour tints its row in Agents, its tab and its hub card (stronger when selected). Right-click the row,
+  The colour tints its row in Sessions, its tab and its hub card (stronger when selected). Right-click the row,
   the card or the tab (Colour…), or press Ctrl+Shift+Y. A space's menu sets the space's colour.
 
 Inspired by Warp:
@@ -62,10 +67,10 @@ Inspired by Warp:
 | `layouts/main-review.json` | Herdr's `main` layout, with the Changes block pointing at `review-changes` |
 | `mods/review-changes/` | Herdr's Changes panel plus "Open full file" (beside the terminal or in a tab), a ⤢ button per file and double-click |
 | `mods/review-file/` | The code view: inline diff, Explorer, Split / Code / Terminal |
-| `mods/review-tabs/`, `mods/review-menu/` | Herdr's tab bar and menu, plus the bell, the per-space Show/Hide items and session-bridge requests |
-| `mods/inbox/` | The notifications inbox |
+| `mods/review-tabs/`, `mods/review-menu/` | Herdr's tab bar and menu, plus the toolbar, the drawer, the per-space Show/Hide items and session-bridge requests |
+| `mods/inbox/` | The notifications drawer |
 | `mods/review-toast/`, `mods/review-pane/` | Herdr's toast and pane header: toasts go into the inbox; panes ring |
-| `mods/review-spaces/`, `mods/review-agents/` | Herdr's sidebar and agents list, with the extra lines |
+| `mods/review-spaces/`, `mods/review-agents/` | Herdr's sidebar (the Sessions list) and the separate agents list, with the extra lines |
 | `mods/hub/` | The hub: the coordinator, every agent, the session-bridge messages and a message box |
 | `mods/session-color/` | The colour picker for sessions and spaces |
 | `mods/commands/`, `mods/launch/` | Command search (history, workflows, Ask AI) and launch configurations |
