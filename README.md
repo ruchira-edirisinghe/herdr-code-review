@@ -43,6 +43,9 @@ New here:
   Claude Code session that plans the work and messages the others over the session bridge) is
   shown apart at the top. It lists the messages between sessions and has a box to message the
   coordinator, one agent or everyone as you. **Start coordinator** opens one with its brief.
+- **Session colours.** Give a session one of twelve named colours, or let it use its space's.
+  The colour edges its row in Agents and its hub card and marks its tab. Right-click the row,
+  the card or the tab (Colour…), or press Ctrl+Shift+Y. A space's menu sets the space's colour.
 
 ## What's in it
 
@@ -56,6 +59,7 @@ New here:
 | `mods/review-toast/`, `mods/review-pane/` | Herdr's toast and pane header: toasts go into the inbox; panes ring |
 | `mods/review-spaces/`, `mods/review-agents/` | Herdr's sidebar and agents list, with the extra lines |
 | `mods/hub/` | The hub: the coordinator, every agent, the session-bridge messages and a message box |
+| `mods/session-color/` | The colour picker for sessions and spaces |
 
 Command palette (Ctrl+Shift+P): **Code view beside the terminal** and **Code view in a new tab**
 open the Explorer for the repo you're working in.
@@ -77,7 +81,7 @@ Already on your own layout? Keep it, and point its Changes block at the new mod:
 Keys for `keys.json` (the inbox's are under `global`):
 
 ```json
-{ "global": { "ctrl-shift-i": "review-tabs.inbox", "ctrl-shift-u": "review-tabs.jump-unread" },
+{ "global": { "ctrl-shift-i": "review-tabs.inbox", "ctrl-shift-u": "review-tabs.jump-unread", "ctrl-shift-y": "review-tabs.color" },
   "mod:review-file": { "ctrl-shift-e": "review-file.explorer", "ctrl-alt-c": "review-file.code-only", "ctrl-alt-s": "review-file.split", "ctrl-alt-t": "review-file.terminal-only" } }
 ```
 
