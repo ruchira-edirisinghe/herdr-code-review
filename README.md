@@ -22,8 +22,14 @@ plus agent tracking inspired by [cmux](https://cmux.com). It is also part of
 Inspired by cmux:
 
 - **Notifications inbox.** A bell with an unread count in the tab bar. Each time an agent needs
-  you or finishes, and every toast, is listed. Ctrl+Shift+I opens it; Ctrl+Shift+U jumps to the
-  latest unread.
+  you or finishes, each session-bridge message and every other toast is listed, grouped by day,
+  each kind in words with an icon. Filter them, remove one, or pause them all for an hour.
+  Ctrl+Shift+I opens it; Ctrl+Shift+U jumps to the latest unread.
+- **Notification settings.** The mods follow `notifications` in settings.json: for each kind
+  (`blocked`, `done`, `bridge`, `other`) `popup` and `inbox` (and `sound`), plus `quiet_until`,
+  `badge` (`count`, `dot`, `off`), `keep`, `read_on_visit`, `rings` and `sidebar_note`. In
+  [Zendr](https://github.com/ruchira-edirisinghe/zendr), Settings → Notifications sets them, and
+  the app follows pop-up length, do not disturb and sounds by kind.
 - **Attention rings.** A pane whose agent needs you gets a tinted header. Its tab lights up.
 - **Sidebar line.** Under each space: its listening ports, its branch's pull request (`gh`), its
   [session-bridge](https://github.com/iddhi-sulakshana/claude-mods/tree/main/claude-session-bridge)
