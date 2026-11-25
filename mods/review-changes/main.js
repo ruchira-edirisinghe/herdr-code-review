@@ -4,7 +4,7 @@
 // space's repo while a code view has the focus.
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar, v_virtual_list } from "gpui-base";
-import { spaces, panes, focused, exec, readTextFile, watchFolder, theme, settings, window, run, setShared } from "herdr";
+import { spaces, panes, focused, exec, readTextFile, watchFolder, theme, settings, window, run, setShared, layout } from "herdr";
 
 // The panels share data in one VM, but their host tasks belong to separate copies.
 const scans = globalThis[Symbol.for("herdr.repoStatus.v2")] ??= new Map();
@@ -284,9 +284,18 @@ export default class Changes extends View {
   openFull(path) {
     if (!this.root || !path) return;
     const file = { root: this.root, path, on: this.on ?? null };
-    // A code view already in this tab shows the file; otherwise one opens beside the terminal.
+    // The layout's code block shows it; else a code view already in this tab; else one
+    // opens beside the terminal.
+    const block = (function find(node) {
+      if (node?.id === "code" && node.content?.mod === "review-file") return node;
+      for (const child of node?.children ?? []) { const found = find(child); if (found) return found; }
+      return null;
+    })(layout());
     const tab = focused()?.tab, view = tab && panes().find(p => p.tab === tab && p.mod === "review-file");
-    if (view) setShared("review-file.goto", { ...file, tab, at: Date.now() });
+    if (block) {
+      if (block.hidden) run("layout.show", { id: "code" });
+      setShared("review-file.goto", { ...file, target: "layout", isGit: true, at: Date.now() });
+    } else if (view) setShared("review-file.goto", { ...file, tab, at: Date.now() });
     else run("pane.split", { direction: "right", mod: "review-file", props: file });
   }
 
