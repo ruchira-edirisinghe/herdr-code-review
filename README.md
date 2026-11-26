@@ -16,6 +16,28 @@ plus agent tracking inspired by [cmux](https://cmux.com). It is also part of
 - **Split, code only, terminal only.** The code view opens beside your terminal. One click
   shows only the code or only the terminal; Ctrl+Shift+Z (pane zoom) goes back to the split.
 - **Live.** The view follows saves in the repo. VS Code opens at the line you're reading.
+- **An editor too.** Tabs (a single click previews, a double click keeps the tab), and an Edit
+  mode with Ctrl+S save. Line endings are kept, and you're asked if the file changed on disk
+  meanwhile. Shortcuts: Ctrl+P quick open (`:42` for a line), Ctrl+G go to line, Ctrl+F / Ctrl+H
+  find and replace, Ctrl+/ comment, Ctrl+] / Ctrl+[ indent, Ctrl+Alt+↑ / ↓ add cursors,
+  Alt+Z wrap, Ctrl+\ split the editor, Ctrl+W close the tab, F1 for the full list.
+- **Ctrl + mouse wheel zoom** in the code view, to show more lines or fewer.
+- **Language detection and file icons.** Seti-style icons per file type in the explorer, the tabs
+  and the Changes panel. The language comes from the name, a shebang, a modeline or the content.
+  Pick another from the status bar.
+- **Source control graph.** The toolbar's Graph button opens the repo's commits with their branch
+  lines, branch and tag pills and the uncommitted changes. A commit's file opens its change.
+- **VS Code extensions.** The command palette's *VS Code extensions* reads the extensions you
+  have installed and applies their colour themes (with their code colours) and their languages.
+  No extension code runs.
+- **More terminals and editors.** The toolbar's split buttons open terminals to the right or below.
+  Split editor opens another code view.
+- **Arrange blocks** (needs [Zendr](https://github.com/ruchira-edirisinghe/zendr)). The toolbar button
+  turns the work area's blocks into cards: drag one onto another block's edge to put it on that side
+  (drop on the bottom edge to place it below), or in the middle to swap. Saved to your layout.
+- **A switch for everything.** `features` in settings.json (Settings → Features in Zendr) turns off
+  `graph`, `code_view`, `code_edit`, `file_icons`, `lang_detect`, `code_zoom`, `vscode_ext`,
+  `split_buttons`, `arrange` and `session_counts`, alongside the existing ones.
 - **A space starts with just the terminal.** The toolbar's Explorer and Code buttons (or a tab's
   right-click menu) show the explorer and the code reviewer. Each space remembers what it shows.
 
@@ -74,6 +96,8 @@ Inspired by Warp:
 | `mods/hub/` | The hub: the coordinator, every agent, the session-bridge messages and a message box |
 | `mods/session-color/` | The colour picker for sessions and spaces |
 | `mods/commands/`, `mods/launch/` | Command search (history, workflows, Ask AI) and launch configurations |
+| `mods/git-graph/` | The source control graph in the right drawer |
+| `mods/vscode/` | VS Code extensions: themes, code colours and languages |
 
 Command palette (Ctrl+Shift+P): **Code view beside the terminal** and **Code view in a new tab**
 open the Explorer for the repo you're working in.
@@ -105,7 +129,8 @@ Keys for `keys.json` (the inbox's are under `global`):
 The code view and Changes panel run `git` read-only in the repo you're working in (`status`, `diff`, `ls-files`,
 `rev-parse`, with `--no-optional-locks` so nothing is written under `.git`). "Commit" in the
 Changes panel runs `git add -A` and `git commit`, as Herdr's own panel does. "VS Code" runs
-`code --goto`. The sidebar runs `gh pr view` for spaces on a branch, and, on Windows, one
+`code --goto` (through a `vscode://file/` link). The graph runs `git log`, `git for-each-ref` and `git diff-tree`.
+The VS Code extensions dialog only reads `package.json` and theme files in the extension folders. The sidebar runs `gh pr view` for spaces on a branch, and, on Windows, one
 PowerShell look at listening ports every 20 seconds while the window is active.
 
 Built for herdr-app 0.1.18. Tested on Windows 11 ARM64.
