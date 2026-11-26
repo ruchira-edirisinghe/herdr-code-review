@@ -82,6 +82,12 @@ Inspired by Warp:
 - **Ask AI** (Ctrl+Shift+Space). Describe it; Claude Code (`claude -p`) writes the command.
 - **Launch configurations** (Ctrl+Shift+J). Save the open spaces and tabs as a setup and reopen it.
 
+Search and spaces:
+
+- **Search** (Alt+Space). Sessions, the repo's files, commands with their keys, settings and
+  notifications in one box. Ctrl+F (or Tab) searches the code instead: match case, regex, this file
+  or the whole repo, and every git repo inside a folder of projects. Bind keys.json's `input`
+  section's `ctrl-f` too, so it works while the editor has focus.
 ## What's in it
 
 | Path | What |
@@ -91,6 +97,7 @@ Inspired by Warp:
 | `mods/review-file/` | The code view: inline diff, Explorer, Split / Code / Terminal |
 | `mods/review-tabs/`, `mods/review-menu/` | Herdr's tab bar and menu, plus the toolbar, the drawer, the per-space Show/Hide items and session-bridge requests |
 | `mods/inbox/` | The notifications drawer |
+| `mods/search/` | Alt+Space and Ctrl+F search |
 | `mods/review-toast/`, `mods/review-pane/` | Herdr's toast and pane header: toasts go into the inbox; panes ring |
 | `mods/review-spaces/`, `mods/review-agents/` | Herdr's sidebar (the Sessions list) and the separate agents list, with the extra lines |
 | `mods/hub/` | The hub: the coordinator, every agent, the session-bridge messages and a message box |
