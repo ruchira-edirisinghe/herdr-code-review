@@ -88,6 +88,9 @@ Search and spaces:
   notifications in one box. Ctrl+F (or Tab) searches the code instead: match case, regex, this file
   or the whole repo, and every git repo inside a folder of projects. Bind keys.json's `input`
   section's `ctrl-f` too, so it works while the editor has focus.
+- **Space menu and icons.** Right-click a space for New tab, New terminal and Change icon… (an emoji
+  picker; emoji names from muan/unicode-emoji-json, MIT).
+
 ## What's in it
 
 | Path | What |
@@ -98,6 +101,7 @@ Search and spaces:
 | `mods/review-tabs/`, `mods/review-menu/` | Herdr's tab bar and menu, plus the toolbar, the drawer, the per-space Show/Hide items and session-bridge requests |
 | `mods/inbox/` | The notifications drawer |
 | `mods/search/` | Alt+Space and Ctrl+F search |
+| `mods/space-icon/` | The emoji picker for a space's icon |
 | `mods/review-toast/`, `mods/review-pane/` | Herdr's toast and pane header: toasts go into the inbox; panes ring |
 | `mods/review-spaces/`, `mods/review-agents/` | Herdr's sidebar (the Sessions list) and the separate agents list, with the extra lines |
 | `mods/hub/` | The hub: the coordinator, every agent, the session-bridge messages and a message box |
